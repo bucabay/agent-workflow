@@ -124,12 +124,39 @@
       "type": "task",
       "kind": "llm",
       "label": "Implement (delegation-aware, single writer)",
-      "description": "The routing decision lives in the state: mechanical+safe work hands volume to the cheap sidekick; judgement-bound or serial-debug work stays with the frontier writer. Exactly one writer runs either way.",
+      "description": "A research-grounded decision (LLM or Jev decider) picks the writer: mechanical+safe -> cheap sidekick; judgment-bound -> frontier writer. Exactly one writer runs either way.",
       "agents": {
         "mode": "pick-one",
         "pick": "first",
+        "decision": {
+          "decider": { "engine": "llm", "agent": "planner" },
+          "context": {
+            "research": [
+              "Devin Fusion: delegation controls what work stays with the expensive model; routing decides whether the expensive model is involved at all.",
+              "Making Fable Cheaper Than Opus: forcing delegation decreases performance - it just delegates the wrong things; delegability is itself a judgment call.",
+              "Devin Fusion bad example: when the judgment IS the deliverable, delegating it backfires (hard React feature scored 27/100).",
+              "Frontier-planner cheap-executor consensus: once the plan is fixed, throughput and cost matter more than raw IQ."
+            ],
+            "guidelines": [
+              "Single writer always: never run two writers in parallel.",
+              "Frontier intelligence goes to judgment; volume goes to the cheap tier.",
+              "When unsure, prefer the frontier writer over the sidekick."
+            ],
+            "input": "$.plan"
+          },
+          "questions": {
+            "delegability": {
+              "type": "choice",
+              "instructions": "Given the plan and the research/guidelines above, is this implementation mechanical enough to hand to the cheap sidekick, or does it still carry judgment that needs the frontier writer?",
+              "criteria": {
+                "mechanical": "Spec is fixed, edits are safe and local, no design decisions remain.",
+                "judgment": "Ambiguity, design, or serial-debugging remains; the deliverable is partly the judgment itself."
+              }
+            }
+          }
+        },
         "candidates": [
-          { "agent": "sidekick", "optional": true, "when": { "path": "$.plan.delegability", "op": "equals", "value": "mechanical" } },
+          { "agent": "sidekick", "optional": true, "when": { "question": "delegability", "equals": "mechanical", "minConfidence": 0.8 } },
           { "agent": "writer" }
         ]
       },

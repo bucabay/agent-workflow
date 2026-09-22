@@ -32,11 +32,30 @@ const resolve = (wf) => {
   const mainStates = new Set(Object.keys(wf.states || {}));
   const flag = (msg) => errors.push(msg);
 
-  const checkAgentRef = (where) => {
+  const checkAgentRef = (where, qids) => {
     if (typeof where.agent === 'string' && !agents.has(where.agent)) flag(`unknown agent '${where.agent}' at ${where._at}`);
-    if (where.when && typeof where.when.path !== 'string') flag(`agentRef 'when' must have a path at ${where._at}`);
+    checkWhen(where.when, qids, where._at);
     return where.agent;
   };
+  const checkWhen = (when, qids, at) => {
+    if (!when) return;
+    if ('question' in when) {
+      if (!qids.has(when.question)) flag(`answerWhen '${when.question}' not a question on the in-scope decision at ${at}`);
+      return;
+    }
+    if (typeof when.path !== 'string') flag(`a 'when' must be a condition (path) or an answerWhen (question) at ${at}`);
+  };
+  const checkDecision = (dec, at) => {
+    if (!dec) return;
+    if (dec.decider?.engine === 'llm' && (!dec.decider.agent || !agents.has(dec.decider.agent))) {
+      flag(`decision decider uses unknown llm agent '${dec.decider.agent}' at ${at}`);
+    }
+    if (dec.decider?.engine === 'jev' && typeof dec.decider.model !== 'string') {
+      flag(`decision decider 'jev' needs a model identifier at ${at}`);
+    }
+    if (!dec.questions || typeof dec.questions !== 'object') flag(`decision needs a 'questions' map at ${at}`);
+  };
+  const decisionQuestionIds = (dec) => new Set(dec && dec.questions ? Object.keys(dec.questions) : []);
   // nested sidekicks: resolve each and detect cycles
   const sidekickVisit = new Set();
   const sidekickStack = [];
@@ -62,14 +81,24 @@ const resolve = (wf) => {
     if (!s || typeof s !== 'object') return;
     const where = (k) => `${at}.${k}`;
     if (s.type === 'task') {
-      if (s.agent) checkAgentRef({ agent: s.agent, _at: at });
-      if (s.agents) s.agents.candidates.forEach((c, i) => checkAgentRef({ ...c, _at: `${at}.agents.candidates[${i}]` }));
+      if (s.agent) checkAgentRef({ agent: s.agent, _at: at }, new Set());
+      if (s.agents) {
+        const dec = s.agents.decision;
+        checkDecision(dec, `${at}.agents.decision`);
+        const qids = decisionQuestionIds(dec);
+        s.agents.candidates.forEach((c, i) => checkAgentRef({ ...c, _at: `${at}.agents.candidates[${i}]` }, qids));
+      }
+    }
+    if (s.type === 'choice') {
+      checkDecision(s.decision, `${at}.decision`);
+      const qids = decisionQuestionIds(s.decision);
+      for (const [i, b] of (s.branches || []).entries()) {
+        if (!targets.has(b.next)) flag(`${at}.branches[${i}].next -> '${b.next}' not a state in scope`);
+        checkWhen(b.when, qids, `${at}.branches[${i}].when`);
+      }
     }
     for (const k of ['next', 'onFail', 'default', 'exhaustNext', 'nextOnApprove', 'nextOnReject']) {
       if (typeof s[k] === 'string' && !targets.has(s[k])) flag(`${where(k)} -> '${s[k]}' not a state in scope`);
-    }
-    if (s.type === 'choice') for (const [i, b] of (s.branches || []).entries()) {
-      if (!targets.has(b.next)) flag(`${at}.branches[${i}].next -> '${b.next}' not a state in scope`);
     }
     if (s.type === 'parallel') for (const [i, b] of (s.branches || []).entries()) {
       if (!subflows.has(b.flow)) flag(`${at}.branches[${i}].flow -> '${b.flow}' not a subflow`);

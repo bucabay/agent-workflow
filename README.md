@@ -19,6 +19,12 @@ A workflow is a JSON document:
 - **Agent routing** is a first-class state decision: a task can `pick-one` or `run-all`
   over named agents, each optionally gated by a `when` condition, marked `optional`
   (best-effort: skip instead of fail), and carrying per-candidate args.
+- **Research-grounded decisions** attach to routing or `choice`: a `decision` block feeds
+  the specific research and your guidelines to a decider — an LLM agent (`engine: "llm"`)
+  or a Jev-style calibrated decision model (`engine: "jev"`) — and branches on typed
+  answers (`choice`/`score`/`noul`) with confidence thresholds. The shape is
+  **Jev-compatible**: `context` maps to Jev `state`, `questions` are Jev questions verbatim,
+  so a Jev backend drops in as one adapter and any LLM can satisfy the same contract.
 - **Delegation hierarchy** lives on agents: `sidekicks[]` names the sub-agents an agent
   owns, recursively nestable (a sidekick may have its own sidekicks).
 - **Evidence** traces every design decision back to a published source and finding, so the
@@ -58,7 +64,7 @@ workflow/
 | ---------------- | ------------------- | ------------------------------------------------------------ |
 | `explore`        | parallel, explorer  | One cheap read-only agent per scope; context-isolated fan-out |
 | `plan`           | planner (frontier)  | Spec-quality brief: constraints, edge cases, definition of done |
-| `implement`      | pick-one agent selector | Mechanically safe -> optional cheap sidekick; judgment -> frontier writer. One writer only |
+| `implement`      | pick-one agent selector + decision | LLM/`jev` decider reads research+guidelines, routes mechanical -> sidekick, judgment -> writer, gated on `minConfidence` |
 | `review`         | reviewer (independent family) | Fresh-context diff review by a model family that didn't write the code |
 | `verify`         | tool                | Deterministic gates: `lint && test && typecheck`             |
 | `quality_gate`   | choice + guard      | Bounded fix loop (`maxIterations: 2`) with `replan` escape hatch |
