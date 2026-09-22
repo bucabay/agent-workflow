@@ -69,7 +69,50 @@
         "cleanContext": { "type": "boolean" },
         "tools": { "type": "array", "items": { "type": "string" } },
         "prompt": { "type": "string" },
-        "maxTurns": { "type": "integer", "minimum": 1 }
+        "maxTurns": { "type": "integer", "minimum": 1 },
+        "optional": {
+          "description": "Best-effort agent: the runtime may omit it (unavailable, not configured, or unnecessary) instead of failing the task that uses it.",
+          "type": "boolean",
+          "default": false
+        },
+        "sidekicks": {
+          "description": "Delegation hierarchy this agent owns while it runs. Each name is another agentDef, which may itself declare sidekicks (arbitrary nesting). Runtime must reject cycles.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "agentRef": {
+      "type": "object",
+      "required": ["agent"],
+      "properties": {
+        "agent": { "type": "string" },
+        "when": { "$ref": "#/$defs/condition" },
+        "args": { "type": "object" },
+        "optional": {
+          "description": "This candidate may be skipped if inapplicable or unavailable.",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "agentSelector": {
+      "description": "Per-state agent routing. pick-one: exactly one matching candidate runs (a candidate with no 'when' always matches and acts as the default). run-all: every matching candidate runs and outputs are combined. An empty yield is an error unless the task state or a candidate is optional.",
+      "type": "object",
+      "required": ["candidates"],
+      "properties": {
+        "mode": { "enum": ["pick-one", "run-all"], "default": "pick-one" },
+        "pick": {
+          "description": "pick-one strategy: first matching in declaration order, cheapest matching by resolved model price, or first matching available at runtime.",
+          "enum": ["first", "cheapest", "available"],
+          "default": "first"
+        },
+        "combine": { "type": "string", "default": "merge" },
+        "candidates": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/agentRef" }
+        }
       }
     },
     "telemetry": {
@@ -168,6 +211,12 @@
             "type": { "const": "task" },
             "kind": { "enum": ["llm", "tool"], "default": "llm" },
             "agent": { "type": "string" },
+            "agents": { "$ref": "#/$defs/agentSelector" },
+            "optional": {
+              "description": "Whole-state best-effort: if agent selection yields nothing, skip to 'next' instead of failing.",
+              "type": "boolean",
+              "default": false
+            },
             "prompt": { "type": "string" },
             "context": { "type": "object" },
             "artifact": { "type": "object" },
@@ -177,9 +226,10 @@
             "onFail": { "type": "string" }
           },
           "allOf": [
+            { "not": { "required": ["agent", "agents"] } },
             {
               "if": { "properties": { "kind": { "const": "llm" } }, "required": ["kind"] },
-              "then": { "required": ["agent"] }
+              "then": { "anyOf": [ { "required": ["agent"] }, { "required": ["agents"] } ] }
             }
           ]
         }

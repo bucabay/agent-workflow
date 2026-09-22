@@ -16,6 +16,11 @@ A workflow is a JSON document:
   `succeed`, and `fail`. Indentation is purely visual; meaning is structural.
 - **Agents** are named roles bound to a model tier (`frontier`, `cheap`, `review`) with a
   tool allowlist (`read`, `grep`, `glob`, `git`), read-only flags, and clean-context flags.
+- **Agent routing** is a first-class state decision: a task can `pick-one` or `run-all`
+  over named agents, each optionally gated by a `when` condition, marked `optional`
+  (best-effort: skip instead of fail), and carrying per-candidate args.
+- **Delegation hierarchy** lives on agents: `sidekicks[]` names the sub-agents an agent
+  owns, recursively nestable (a sidekick may have its own sidekicks).
 - **Evidence** traces every design decision back to a published source and finding, so the
   workflow is auditable in the same repo that ships it.
 - **Telemetry** spells out per-state GenAI metrics (OTel semantic conventions), expected
@@ -27,7 +32,7 @@ The default workflow (`default.workflow.json`) encodes a research-backed default
 ```
 explore (4 parallel cheap read-only agents)
   -> plan (frontier, writes artifacts/spec.md)
-  -> route (mechanical -> sidekick / judgment -> frontier writer)   # single writer
+  -> implement (pick-one: sidekick for mechanical / writer for judgment)  # single writer
   -> review (independent family, clean-context diff review)
   -> verify (lint && test && typecheck)
   -> quality_gate (bounded fix loop, max 2 iterations, else replan)
@@ -53,12 +58,11 @@ workflow/
 | ---------------- | ------------------- | ------------------------------------------------------------ |
 | `explore`        | parallel, explorer  | One cheap read-only agent per scope; context-isolated fan-out |
 | `plan`           | planner (frontier)  | Spec-quality brief: constraints, edge cases, definition of done |
-| `route`          | choice              | Route on `plan.delegability`: `mechanical` vs `judgment`     |
-| `implement_sidekick` / `implement_frontier` | single writer | One writer only, never parallel writers                       |
+| `implement`      | pick-one agent selector | Mechanically safe -> optional cheap sidekick; judgment -> frontier writer. One writer only |
 | `review`         | reviewer (independent family) | Fresh-context diff review by a model family that didn't write the code |
 | `verify`         | tool                | Deterministic gates: `lint && test && typecheck`             |
 | `quality_gate`   | choice + guard      | Bounded fix loop (`maxIterations: 2`) with `replan` escape hatch |
-| `replan`         | planner (frontier)  | Fix cycle exhausted -> frontier re-owns design, re-enters `route` |
+| `replan`         | planner (frontier)  | Fix cycle exhausted -> frontier re-owns design, re-enters `implement` |
 | `report`         | planner (frontier)  | Final summary, per-state cost ledger, rating hook            |
 
 Subflows: `explore_repo` (a single isolated exploration pass) and `fix_attempt`

@@ -66,9 +66,11 @@ const kindColor = (s) => {
   if (s.type === 'call') return '#e8a0c8';
   if (s.kind === 'tool') return '#d5d8dc';
   if (s.agent === 'sidekick' || s.agent === 'explorer') return '#a9dfbf';
+  if (s.agents) return s.agents.mode === 'run-all' ? '#7fb3d5' : '#e4717a';
   return '#f9e79f';
 };
-const shortKind = (s) => s.type === 'choice' ? 'choice' : s.type === 'parallel' ? 'parallel' : s.type === 'call' ? s.flow : (s.kind || 'llm') + (s.agent ? ':' + s.agent : '');
+const agentNames = (s) => s.agent ? [s.agent] : (s.agents ? s.agents.candidates.map(c => c.agent) : []);
+const shortKind = (s) => s.type === 'choice' ? 'choice' : s.type === 'parallel' ? 'parallel' : s.type === 'call' ? s.flow : (s.kind || 'llm') + (agentNames(s).length ? ':' + agentNames(s).join('|') : '');
 
 const nodes = Object.entries(states).map(([id, s]) => ({ id, s, color: kindColor(s), kind: shortKind(s) }));
 
@@ -261,7 +263,11 @@ const cost = (s) => {
     }
     return sum;
   }
-  return costOfTokens(s, s.agent);
+  const keys = agentNames(s);
+  if (!keys.length) return costOfTokens(s, undefined);
+  const cs = [...new Set(keys)].map(k => costOfTokens(s, k)).filter(v => v != null);
+  if (!cs.length) return null;
+  return s.agents && s.agents.mode === 'run-all' ? cs.reduce((a, b) => a + b, 0) : Math.max(...cs);
 };
 let total = 0;
 console.log('\nworkflow summary');

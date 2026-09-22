@@ -23,9 +23,9 @@
    "color": "f9e79f"
   },
   {
-   "id": "route",
+   "id": "implement",
    "type": "text",
-   "text": "route\nchoice",
+   "text": "implement\nllm:sidekick|writer",
    "x": 361.25,
    "y": 11.25,
    "width": 264,
@@ -33,30 +33,10 @@
    "color": "e4717a"
   },
   {
-   "id": "implement_sidekick",
-   "type": "text",
-   "text": "implement_sidekick\nllm:sidekick",
-   "x": 536.25,
-   "y": 11.25,
-   "width": 264,
-   "height": 69.6,
-   "color": "a9dfbf"
-  },
-  {
-   "id": "implement_frontier",
-   "type": "text",
-   "text": "implement_frontier\nllm:writer",
-   "x": 536.25,
-   "y": 63.75,
-   "width": 264,
-   "height": 69.6,
-   "color": "f9e79f"
-  },
-  {
    "id": "review",
    "type": "text",
    "text": "review\nllm:reviewer",
-   "x": 711.25,
+   "x": 536.25,
    "y": 11.25,
    "width": 264,
    "height": 69.6,
@@ -66,7 +46,7 @@
    "id": "verify",
    "type": "text",
    "text": "verify\ntool",
-   "x": 886.25,
+   "x": 711.25,
    "y": 11.25,
    "width": 264,
    "height": 69.6,
@@ -76,7 +56,7 @@
    "id": "quality_gate",
    "type": "text",
    "text": "quality_gate\nchoice",
-   "x": 1061.25,
+   "x": 886.25,
    "y": 11.25,
    "width": 264,
    "height": 69.6,
@@ -86,7 +66,7 @@
    "id": "fix",
    "type": "text",
    "text": "fix\nfix_attempt",
-   "x": 1236.25,
+   "x": 1061.25,
    "y": 11.25,
    "width": 264,
    "height": 69.6,
@@ -96,7 +76,7 @@
    "id": "replan",
    "type": "text",
    "text": "replan\nllm:planner",
-   "x": 1236.25,
+   "x": 1061.25,
    "y": 63.75,
    "width": 264,
    "height": 69.6,
@@ -106,47 +86,14 @@
    "id": "report",
    "type": "text",
    "text": "report\nllm:planner",
-   "x": 1236.25,
+   "x": 1061.25,
    "y": 116.25,
    "width": 264,
    "height": 69.6,
    "color": "f9e79f"
   },
   {
-   "id": "lg3",
-   "type": "text",
-   "text": "mechanical",
-   "x": 9999,
-   "y": 9999,
-   "width": 60,
-   "height": 18,
-   "color": "333",
-   "opacity": 0.7
-  },
-  {
-   "id": "lg4",
-   "type": "text",
-   "text": "judgment",
-   "x": 9999,
-   "y": 9999,
-   "width": 60,
-   "height": 18,
-   "color": "333",
-   "opacity": 0.7
-  },
-  {
-   "id": "lg5",
-   "type": "text",
-   "text": "default",
-   "x": 9999,
-   "y": 9999,
-   "width": 60,
-   "height": 18,
-   "color": "333",
-   "opacity": 0.7
-  },
-  {
-   "id": "lg10",
+   "id": "lg6",
    "type": "text",
    "text": "pass",
    "x": 9999,
@@ -157,7 +104,7 @@
    "opacity": 0.7
   },
   {
-   "id": "lg11",
+   "id": "lg7",
    "type": "text",
    "text": "fix",
    "x": 9999,
@@ -168,7 +115,7 @@
    "opacity": 0.7
   },
   {
-   "id": "lg12",
+   "id": "lg8",
    "type": "text",
    "text": "default+exhaust",
    "x": 9999,
@@ -192,7 +139,7 @@
   {
    "id": "e1",
    "fromNode": "plan",
-   "toNode": "route",
+   "toNode": "implement",
    "fromSide": "right",
    "toSide": "left",
    "label": "",
@@ -200,51 +147,15 @@
   },
   {
    "id": "e2",
-   "fromNode": "route",
-   "toNode": "implement_sidekick",
+   "fromNode": "implement",
+   "toNode": "review",
    "fromSide": "right",
    "toSide": "left",
-   "label": "mechanical",
+   "label": "",
    "color": "2"
   },
   {
    "id": "e3",
-   "fromNode": "route",
-   "toNode": "implement_frontier",
-   "fromSide": "right",
-   "toSide": "left",
-   "label": "judgment",
-   "color": "2"
-  },
-  {
-   "id": "e4",
-   "fromNode": "route",
-   "toNode": "implement_frontier",
-   "fromSide": "right",
-   "toSide": "left",
-   "label": "default",
-   "color": "2"
-  },
-  {
-   "id": "e5",
-   "fromNode": "implement_sidekick",
-   "toNode": "review",
-   "fromSide": "right",
-   "toSide": "left",
-   "label": "",
-   "color": "2"
-  },
-  {
-   "id": "e6",
-   "fromNode": "implement_frontier",
-   "toNode": "review",
-   "fromSide": "right",
-   "toSide": "left",
-   "label": "",
-   "color": "2"
-  },
-  {
-   "id": "e7",
    "fromNode": "review",
    "toNode": "verify",
    "fromSide": "right",
@@ -253,7 +164,7 @@
    "color": "2"
   },
   {
-   "id": "e8",
+   "id": "e4",
    "fromNode": "verify",
    "toNode": "quality_gate",
    "fromSide": "right",
@@ -262,7 +173,7 @@
    "color": "2"
   },
   {
-   "id": "e9",
+   "id": "e5",
    "fromNode": "quality_gate",
    "toNode": "report",
    "fromSide": "right",
@@ -271,7 +182,7 @@
    "color": "2"
   },
   {
-   "id": "e10",
+   "id": "e6",
    "fromNode": "quality_gate",
    "toNode": "fix",
    "fromSide": "right",
@@ -280,7 +191,7 @@
    "color": "2"
   },
   {
-   "id": "e11",
+   "id": "e7",
    "fromNode": "quality_gate",
    "toNode": "replan",
    "fromSide": "right",
@@ -289,7 +200,7 @@
    "color": "2"
   },
   {
-   "id": "e12",
+   "id": "e8",
    "fromNode": "fix",
    "toNode": "quality_gate",
    "fromSide": "right",
@@ -298,9 +209,9 @@
    "color": "2"
   },
   {
-   "id": "e13",
+   "id": "e9",
    "fromNode": "replan",
-   "toNode": "route",
+   "toNode": "implement",
    "fromSide": "right",
    "toSide": "left",
    "label": "",
