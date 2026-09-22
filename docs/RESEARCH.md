@@ -1,6 +1,6 @@
 # AWL Research Overview
 
-Where the `hardroad.default` workflow design comes from, and what each source actually
+Where the `agent.default` workflow design comes from, and what each source actually
 contributes. Every evidence block inside `default.workflow.json` cites one of these.
 
 ## Working consensus: multi-agent systems today

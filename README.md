@@ -5,7 +5,7 @@ software tasks as JSON state machines, borrowing its execution model from the Am
 Language and extending it with agent routing, OTel-aligned telemetry, evidence traceability,
 and cost-estimation hooks.
 
-This package ships the schema, an evidence-based reference workflow (`hardroad.default`),
+This package ships the schema, an evidence-based reference workflow (`agent.default`),
 and tooling that validates a workflow and renders it to diagrams.
 
 ## Description
@@ -39,7 +39,7 @@ explore (4 parallel cheap read-only agents)
 ```
 workflow/
 ├── schema.json             # JSON Schema (draft 2020-12) for the AWL dialect
-├── default.workflow.json   # the reference "hardroad.default" workflow + subflows
+├── default.workflow.json   # the reference "agent.default" workflow + subflows
 ├── validate.mjs            # AJV validation of a workflow against schema.json
 ├── render.mjs              # renders a workflow -> Mermaid, JSON Canvas, SVG, HTML storyboard
 ├── visual/                 # generated artifacts (graph.mmd/.canvas/.svg/.html)

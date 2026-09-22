@@ -2,7 +2,7 @@
   "$schema": "./schema.json",
   "format": "awl",
   "version": "1.0.0",
-  "name": "hardroad.default",
+  "name": "agent.default",
   "description": "Evidence-based default agent workflow: cheap parallel read-only exploration -> frontier planning -> delegation-aware implementation (single writer) -> clean-context diff review -> deterministic verification -> bounded fix/replan loop -> report with telemetry.",
   "meta": {
     "schemaVersion": "2026.09",
