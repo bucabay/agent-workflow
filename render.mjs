@@ -90,20 +90,34 @@ for (const [id, s] of Object.entries(states)) {
   }
 }
 
-// ---- layered layout (longest-path layering, cycle-safe) ---------------------
-const layer = {};
+// ---- layered layout (longest-path layering, back-edge-aware) -----------------
 const byId = Object.fromEntries(nodes.map(n => [n.id, n]));
 const adj = new Map(nodes.map(n => [n.id, new Set()]));
 for (const e of edges) adj.get(e.from)?.add(e.to);
 const outgoing = new Map(nodes.map(n => [n.id, [...(adj.get(n.id) || [])]]));
-layer[wf.start] = 0;
-// BFS-style relaxation capped to bound cycles (loopbacks stop escalating depth)
+// DFS from start finds back edges (edges that close a cycle). They are excluded
+// from layer-length so loopbacks nest near their cycle instead of marching the
+// whole graph right and stretching every connector.
+const layer = {};
+const layerState = new Map();
+const backEdges = new Set();
+const dfsLayer = (id) => {
+  layerState.set(id, 1);
+  for (const t of outgoing.get(id) || []) {
+    const s = layerState.get(t);
+    if (s === 1) { backEdges.add(id + '->' + t); continue; }
+    if (s === 2) continue;
+    dfsLayer(t);
+  }
+  layerState.set(id, 2);
+};
+dfsLayer(wf.start);
+for (const n of nodes) layer[n.id] = 0;
 for (let i = 0; i < nodes.length; i++) {
   for (const n of nodes) {
-    if (!(n.id in layer)) continue;
-    for (const t of outgoing.get(n.id)) {
-      const d = layer[n.id] + 1;
-      if (!(t in layer) || layer[t] < d) layer[t] = d;
+    for (const t of outgoing.get(n.id) || []) {
+      if (backEdges.has(n.id + '->' + t)) continue;
+      layer[t] = Math.max(layer[t], layer[n.id] + 1);
     }
   }
 }
