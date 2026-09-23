@@ -59,7 +59,7 @@ if (!(wf.meta?.estimate)) console.warn('  (warn) no meta.estimate block -> cost 
 
 // ---- graph model ------------------------------------------------------------
 const NODE_W = 220, NODE_H = 58, GAP_X = 60, GAP_Y = 26;
-const esc = (s) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const kindColor = (s) => {
   if (s.type === 'choice') return '#e4717a';
   if (s.type === 'parallel') return '#7fb3d5';
@@ -218,6 +218,31 @@ let modelHeader = `<h2>Models (estimator input)</h2><table border="1" cellspacin
 let telemetryRows = (wf.telemetry?.record || []).map(x => `<li><code>${esc(x)}</code></li>`).join('');
 let telemetryHeader = `<h2>Telemetry (per state)</h2><ul>${telemetryRows}</ul>`;
 
+// research-grounded decisions (on agents selectors and choice states)
+let decisions = '';
+for (const n of nodes) {
+  const s = n.s;
+  const dec = s.agents?.decision || s.decision;
+  if (!dec) continue;
+  const d = dec.decider || {};
+  const ctx = dec.context || {};
+  const qs = Object.entries(dec.questions || {}).map(([name, q]) =>
+    `<li><code>${esc(name)}</code> <span style="color:#888">(${esc(q.type)})</span> — ${esc(typeof q.instructions === 'string' ? q.instructions : JSON.stringify(q.instructions))}` +
+    (q.criteria ? `<br><span style="font-size:12px;color:#666">criteria: ${esc(JSON.stringify(q.criteria))}</span>` : '') + `</li>`).join('');
+  const routeFor = (w) => w ? (w.question ? `${w.question}${w.equals ? '=' + esc(JSON.stringify(w.equals)) : ''}${w.minConfidence ? ' @conf≥' + esc(w.minConfidence) : ''}${w.gte != null ? '≥' + esc(w.gte) : ''}${w.lte != null ? '≤' + esc(w.lte) : ''}` : `${w.path} ${w.op} ${esc(JSON.stringify(w.value))}`) : '<i>(default)</i>';
+  const branchRows = s.agents
+    ? s.agents.candidates.map(c => `<li><code>${esc(c.agent)}</code>${c.optional ? ' <span style="color:#888">(optional)</span>' : ''} — when: ${routeFor(c.when)}</li>`).join('')
+    : (s.branches || []).map(b => `<li>${esc(b.label || 'branch')} → <code>${esc(b.next)}</code> when: ${routeFor(b.when)}</li>`).join('');
+  decisions += `<h3>${esc(n.id)} <span style="color:#888;font-weight:400">(${s.agents ? 'agent selector' : 'choice'})</span></h3>
+<p><b>decider:</b> <code>${esc(JSON.stringify(d))}</code></p>
+${ctx.research?.length ? `<p><b>research:</b><ul>${ctx.research.map(r => `<li>${esc(r)}</li>`).join('')}</ul></p>` : ''}
+${ctx.guidelines?.length ? `<p><b>guidelines:</b><ul>${ctx.guidelines.map(g => `<li>${esc(g)}</li>`).join('')}</ul></p>` : ''}
+${ctx.input ? `<p><b>input into state:</b> <code>${esc(JSON.stringify(ctx.input))}</code></p>` : ''}
+<p><b>questions:</b><ul>${qs}</ul></p>
+<p><b>routing:</b><ul>${branchRows}</ul></p>`;
+}
+const decisionsHeader = decisions ? `<h2>Decisions (research-grounded)</h2>${decisions}` : '';
+
 const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${esc(wf.name)}</title></head>
 <body style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:1100px;margin:24px auto;color:#222">
 <h1>${esc(wf.name)} <span style="font-weight:400;color:#666">v${esc(wf.version)}</span></h1>
@@ -225,6 +250,7 @@ const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>
 <p><b>format:</b> ${esc(wf.format)} &nbsp; <b>start:</b> ${esc(wf.start)} &nbsp; <b>schema:</b> ${esc(wf.meta?.schemaVersion || '')}</p>
 <div>${svg}</div>
 ${evidenceHeader}
+${decisionsHeader}
 ${modelHeader}
 ${telemetryHeader}
 <h2>Agents</h2><pre style="background:#f6f8fa;padding:12px;border-radius:8px;overflow-x:auto">${esc(JSON.stringify(wf.agents, null, 2))}</pre>
