@@ -234,7 +234,22 @@
           "description": "The body of evidence every decider must read before answering: the specific research and the caller's guidelines. For a Jev decider this folds into 'state'.",
           "type": "object",
           "properties": {
-            "research": { "type": "array", "items": { "type": "string" } },
+            "research": {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  { "type": "string" },
+                  {
+                    "type": "object",
+                    "required": ["text"],
+                    "properties": {
+                      "text": { "type": "string" },
+                      "url": { "type": "string" }
+                    }
+                  }
+                ]
+              }
+            },
             "guidelines": { "type": "array", "items": { "type": "string" } },
             "input": {
               "description": "Path(s) into the workflow state folded into the evaluated state.",
@@ -276,7 +291,8 @@
             "required": ["source", "finding"],
             "properties": {
               "source": { "type": "string" },
-              "finding": { "type": "string" }
+              "finding": { "type": "string" },
+              "url": { "type": "string" }
             }
           }
         },

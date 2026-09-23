@@ -114,9 +114,9 @@
       "expectedTokens": { "input": 9000, "output": 3500 },
       "metrics": { "emit": true },
       "evidence": [
-        { "source": "Devin Fusion", "finding": "Frontier intelligence should be spent on the plan, ambiguity, and final review - not on mechanical volume." },
-        { "source": "Making Fable Cheaper Than Opus", "finding": "The quality lever is the brief: enumerate constraints, edge cases, and a definition of done. Fable's constraint-rich briefs beat Opus's dictated file contents." },
-        { "source": "VS Code context-engineering guide", "finding": "An implementation plan is a first-class artifact you can read, diff, and gate before any side effect fires." }
+        { "source": "Devin Fusion", "finding": "Frontier intelligence should be spent on the plan, ambiguity, and final review - not on mechanical volume.", "url": "https://cognition.com/blog/devin-fusion" },
+        { "source": "Making Fable Cheaper Than Opus", "finding": "The quality lever is the brief: enumerate constraints, edge cases, and a definition of done. Fable's constraint-rich briefs beat Opus's dictated file contents.", "url": "https://cognition.com/blog/making-fable-cheaper-than-opus" },
+        { "source": "VS Code context-engineering guide", "finding": "An implementation plan is a first-class artifact you can read, diff, and gate before any side effect fires.", "url": "https://code.visualstudio.com/docs/agents/guides/context-engineering-guide" }
       ],
       "next": "implement"
     },
@@ -132,9 +132,9 @@
           "decider": { "engine": "llm", "agent": "planner" },
           "context": {
             "research": [
-              "Devin Fusion: delegation controls what work stays with the expensive model; routing decides whether the expensive model is involved at all.",
-              "Making Fable Cheaper Than Opus: forcing delegation decreases performance - it just delegates the wrong things; delegability is itself a judgment call.",
-              "Devin Fusion bad example: when the judgment IS the deliverable, delegating it backfires (hard React feature scored 27/100).",
+              { "text": "Devin Fusion: delegation controls what work stays with the expensive model; routing decides whether the expensive model is involved at all.", "url": "https://cognition.com/blog/devin-fusion" },
+              { "text": "Making Fable Cheaper Than Opus: forcing delegation decreases performance - it just delegates the wrong things; delegability is itself a judgment call.", "url": "https://cognition.com/blog/making-fable-cheaper-than-opus" },
+              { "text": "Devin Fusion bad example: when the judgment IS the deliverable, delegating it backfires (hard React feature scored 27/100).", "url": "https://cognition.com/blog/devin-fusion" },
               "Frontier-planner cheap-executor consensus: once the plan is fixed, throughput and cost matter more than raw IQ."
             ],
             "guidelines": [
@@ -164,11 +164,11 @@
       "expectedTokens": { "input": 14000, "output": 7000 },
       "metrics": { "emit": true },
       "evidence": [
-        { "source": "Devin Fusion", "finding": "Delegation controls what work stays with the expensive model; routing decides whether the expensive model is involved at all." },
-        { "source": "Making Fable Cheaper Than Opus", "finding": "Forcing delegation decreases performance - it just delegates the wrong things. Delegability is itself a judgment call." },
-        { "source": "Devin Fusion bad example", "finding": "When the judgment IS the deliverable, delegating it backfires (hard React feature scored 27/100). Mechanical work hands off cleanly." },
+        { "source": "Devin Fusion", "finding": "Delegation controls what work stays with the expensive model; routing decides whether the expensive model is involved at all.", "url": "https://cognition.com/blog/devin-fusion" },
+        { "source": "Making Fable Cheaper Than Opus", "finding": "Forcing delegation decreases performance - it just delegates the wrong things. Delegability is itself a judgment call.", "url": "https://cognition.com/blog/making-fable-cheaper-than-opus" },
+        { "source": "Devin Fusion bad example", "finding": "When the judgment IS the deliverable, delegating it backfires (hard React feature scored 27/100). Mechanical work hands off cleanly.", "url": "https://cognition.com/blog/devin-fusion" },
         { "source": "Frontier-planner cheap-executor consensus", "finding": "Once the plan is fixed, throughput and cost matter more than raw IQ." },
-        { "source": "LangChain / Cognition", "finding": "Writes must stay single-threaded; parallel writes fragment implicit decisions." }
+        { "source": "LangChain / Cognition", "finding": "Writes must stay single-threaded; parallel writes fragment implicit decisions.", "url": "https://www.langchain.com/blog/how-and-when-to-build-multi-agent-systems" }
       ],
       "next": "review"
     },
@@ -182,7 +182,7 @@
       "expectedTokens": { "input": 8000, "output": 2000 },
       "metrics": { "emit": true },
       "evidence": [
-        { "source": "Cognition 'What's Actually Working'", "finding": "A clean-context reviewer with no shared context catches bugs the author cannot see; shorter context = more intelligence on the diff." },
+        { "source": "Cognition 'What's Actually Working'", "finding": "A clean-context reviewer with no shared context catches bugs the author cannot see; shorter context = more intelligence on the diff.", "url": "https://cognition.com/blog/multi-agents-working" },
         { "source": "fusion-conductor", "finding": "Main and sidekick from different vendors means every diff gets an independent second-family read." },
         { "source": "Pioneer AI", "finding": "The model that wrote the code is often the worst reviewer of it." }
       ],
@@ -210,10 +210,10 @@
         { "label": "pass",   "when": { "path": "$.verify.passed", "op": "equals", "value": true }, "next": "report" },
         { "label": "fix",    "when": { "path": "$.verify.passed", "op": "equals", "value": false }, "next": "fix" }
       ],
-"default": "replan",
+      "default": "replan",
       "guard": { "maxIterations": 2, "exhaustNext": "replan" },
       "evidence": [
-        { "source": "Evaluator-optimizer", "finding": "Loop generation + evaluation must be bounded; unbounded loops drift. Guard counts loopbacks, exhaust routes to replan." }
+        { "source": "Evaluator-optimizer", "finding": "Loop generation + evaluation must be bounded; unbounded loops drift. Guard counts loopbacks, exhaust routes to replan.", "url": "https://www.anthropic.com/engineering/building-effective-agents" }
       ]
     },
     "fix": {
@@ -223,7 +223,7 @@
       "description": "Bounded corrective iteration; each pass records loops + cost to the ledger.",
       "metrics": { "emit": true },
       "evidence": [
-        { "source": "Anthropic workflow patterns", "finding": "Evaluator-optimizer: loop generation + evaluation; must be bounded to stay accurate." },
+        { "source": "Anthropic workflow patterns", "finding": "Evaluator-optimizer: loop generation + evaluation; must be bounded to stay accurate.", "url": "https://www.anthropic.com/engineering/building-effective-agents" },
         { "source": "Verdent/retry evidence", "finding": "Bounded multi-attempt retry lifts pass rate (81.2% pass@3 vs single-attempt baselines)." }
       ],
       "next": "quality_gate"

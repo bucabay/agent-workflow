@@ -205,7 +205,11 @@ svg += '</svg>';
 // evidence table + telemetry summary
 let rows = '';
 for (const n of nodes) {
-  rows += `<tr><td><b>${esc(n.id)}</b></td><td>${esc(shortKind(n.s))}</td><td>${esc(n.s.label || '')}</td><td>${esc((n.s.evidence || []).map(e => e.finding).join(' | '))}</td></tr>`;
+  const ev = (n.s.evidence || []).map(e => {
+    const t = esc(e.finding);
+    return e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener">${t}</a>` : t;
+  }).join(' | ');
+  rows += `<tr><td><b>${esc(n.id)}</b></td><td>${esc(shortKind(n.s))}</td><td>${esc(n.s.label || '')}</td><td>${ev}</td></tr>`;
 }
 let evidenceHeader = `<h2>State → evidence</h2><table border="1" cellspacing="0" cellpadding="6"><tr><th>state</th><th>kind</th><th>label</th><th>evidence</th></tr>${rows}</table>`;
 
@@ -219,6 +223,10 @@ let telemetryRows = (wf.telemetry?.record || []).map(x => `<li><code>${esc(x)}</
 let telemetryHeader = `<h2>Telemetry (per state)</h2><ul>${telemetryRows}</ul>`;
 
 // research-grounded decisions (on agents selectors and choice states)
+const linkOr = (item) => {
+  if (typeof item === 'string') return esc(item);
+  return item.url ? `<a href="${esc(item.url)}" target="_blank" rel="noopener">${esc(item.text)}</a>` : esc(item.text);
+};
 let decisions = '';
 for (const n of nodes) {
   const s = n.s;
@@ -235,7 +243,7 @@ for (const n of nodes) {
     : (s.branches || []).map(b => `<li>${esc(b.label || 'branch')} → <code>${esc(b.next)}</code> when: ${routeFor(b.when)}</li>`).join('');
   decisions += `<h3>${esc(n.id)} <span style="color:#888;font-weight:400">(${s.agents ? 'agent selector' : 'choice'})</span></h3>
 <p><b>decider:</b> <code>${esc(JSON.stringify(d))}</code></p>
-${ctx.research?.length ? `<p><b>research:</b><ul>${ctx.research.map(r => `<li>${esc(r)}</li>`).join('')}</ul></p>` : ''}
+${ctx.research?.length ? `<p><b>research:</b><ul>${ctx.research.map(r => `<li>${linkOr(r)}</li>`).join('')}</ul></p>` : ''}
 ${ctx.guidelines?.length ? `<p><b>guidelines:</b><ul>${ctx.guidelines.map(g => `<li>${esc(g)}</li>`).join('')}</ul></p>` : ''}
 ${ctx.input ? `<p><b>input into state:</b> <code>${esc(JSON.stringify(ctx.input))}</code></p>` : ''}
 <p><b>questions:</b><ul>${qs}</ul></p>
@@ -254,7 +262,16 @@ ${decisionsHeader}
 ${modelHeader}
 ${telemetryHeader}
 <h2>Agents</h2><pre style="background:#f6f8fa;padding:12px;border-radius:8px;overflow-x:auto">${esc(JSON.stringify(wf.agents, null, 2))}</pre>
+<h2>Schema (live)</h2><p style="font-size:13px;color:#666">Fetched from <a href="../schema.json">../schema.json</a> at open time — always the current version, never the one baked into this file.</p>
+<pre id="schema-live" style="background:#f6f8fa;padding:12px;border-radius:8px;overflow-x:auto;max-height:520px;font-size:11px">loading…</pre>
 <h2>Source (research)</h2><p>${esc(wf.meta?.source || '')}</p>
+<script>
+fetch('../schema.json').then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(j => {
+  document.getElementById('schema-live').textContent = JSON.stringify(j, null, 2);
+}).catch(e => {
+  document.getElementById('schema-live').textContent = 'Could not fetch ../schema.json (' + e.message + '). Open via a local server (python3 -m http.server) or read the linked file directly.';
+});
+</script>
 </body></html>`;
 
 writeFileSync(join(outDir, 'graph.svg'), svg + '\n');
