@@ -3,13 +3,23 @@
   "version": "0.1.0",
   "license": "MIT",
   "type": "module",
+  "bin": {
+    "awl": "./bin/awl.mjs"
+  },
   "scripts": {
     "validate": "node validate.mjs",
     "render": "node render.mjs",
-    "test": "node validate.mjs && node render.mjs"
+    "engine": "node src/awl/tests.mjs",
+    "test": "node validate.mjs && node render.mjs && node src/awl/tests.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.280"
   },
   "devDependencies": {
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.280"
   }
 }

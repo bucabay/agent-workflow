@@ -6,7 +6,8 @@ Language and extending it with agent routing, OTel-aligned telemetry, evidence t
 and cost-estimation hooks.
 
 This package ships the schema, an evidence-based reference workflow (`agent.default`),
-and tooling that validates a workflow and renders it to diagrams.
+tooling that validates a workflow and renders it to diagrams, and a reference **client**
+(`awl`) that executes workflows against a pluggable agent backend.
 
 ## Description
 
@@ -48,11 +49,12 @@ explore (4 parallel cheap read-only agents)
 ## Architecture
 
 ```
-workflow/
 ├── schema.json             # JSON Schema (draft 2020-12) for the AWL dialect
 ├── default.workflow.json   # the reference "agent.default" workflow + subflows
 ├── validate.mjs            # AJV validation of a workflow against schema.json
 ├── render.mjs              # renders a workflow -> Mermaid, JSON Canvas, SVG, HTML storyboard
+├── bin/awl.mjs             # the awl CLI: validate / cost / run / resume / status
+├── src/awl/                # the client: engine, decisions, backends, ledger (see below)
 ├── visual/                 # generated artifacts (graph.mmd/.canvas/.svg/.html)
 └── docs/
     └── RESEARCH.md         # research overview with links behind the design
@@ -90,10 +92,62 @@ Subflows: `explore_repo` (a single isolated exploration pass) and `fix_attempt`
 
 ## Cost estimation
 
-`render.mjs` prints a per-state USD estimate from `expectedTokens` and the per-model
-`usdPerMillionInput/usdPerMillionOutput` rates. `meta.estimate` declares the budget target
-($5.00 default) and whether estimates should be refit. Estimates ignore retries, loopbacks,
-and cache effects.
+`render.mjs` and `awl cost` print a per-state USD estimate from `expectedTokens` and the
+per-model `usdPerMillionInput/usdPerMillionOutput` rates. `meta.estimate` declares the
+budget target ($5.00 default) and whether estimates should be refit. Estimates ignore
+retries, loopbacks, and cache effects.
+
+## Client (`awl`)
+
+A thin CLI + library that executes AWL workflows. The state machine is ours; the agent
+loop is a pluggable backend.
+
+```
+bin/awl.mjs              # CLI
+src/awl/
+├── loader.mjs           # AJV + semantic resolution (shared with validate.mjs)
+├── engine.mjs           # state-machine walker: task/choice/parallel/map/call/
+│                        #   approval/pass/succeed/fail, guards, retry, selectors
+├── decisions.mjs        # research-grounded decisions: llm | jev deciders
+├── state.mjs            # $.path conditions + answerWhen/confidence evaluation
+├── verify.mjs           # tool tasks (sh -c) + approval TTY prompt
+├── runstore.mjs         # run checkpoint journals (.awl/runs/<id>.json), resume
+├── cli.mjs              # validate / cost / run / resume / status
+└── backends/
+    ├── claude.mjs       # Claude Agent SDK adapter (primary)
+    └── mock.mjs         # scripted backend for tests
+```
+
+Backend mapping to the Agent SDK: read-only agents → `permissionMode: "dontAsk"` +
+a mapped tool allowlist (`read/grep/glob/git` → `Read`/`Grep`/`Glob`/`Bash`); clean
+context → fresh session per state; `sidekicks[]` → SDK subagent definitions; tool-call
+hooks → telemetry; `total_cost_usd` → the per-state cost ledger.
+
+```sh
+npm i
+export ANTHROPIC_API_KEY=...
+
+node bin/awl.mjs validate default.workflow.json   # schema + reference check
+node bin/awl.mjs cost    default.workflow.json    # per-state estimate
+node bin/awl.mjs run     default.workflow.json --input input.json -y --auto
+node bin/awl.mjs status                           # persisted runs
+node bin/awl.mjs resume  <runId>                  # re-run reusing decisions/loop counts
+AWL_BACKEND=mock node bin/awl.mjs run default.workflow.json   # no API key (deterministic)
+```
+
+- **Verification is real**: `tool` states run the shell command (`lint && test && typecheck`)
+  as the deterministic gate; the model never self-evaluates.
+- **Decisions are first-class**: an LLM decider answers the Jev-shaped questions from
+  `research` + `guidelines` + folded state; `engine: "jev"` posts the same body to
+  `$AWL_JEV_URL`. Branches route on answers with confidence floors.
+- **Loops are bounded**: guard counters feed the ledger; exhaustion routes to
+  `exhaustNext` (and a hard `AWL_MAX_REPLANS=10` cap prevents infinite replan loops).
+- **Resume is decision-preserving**: persisted runs replay with stored decision answers,
+  guard counts, and outputs, so a `resume` reproduces the exact flow up to the failure.
+
+Caveats: `parallel`/`map`/`call` subflows write into the shared run ledger; a subflow
+state targeting a main-scope state ends the subflow (the caller follows its own `next`);
+`resume` replays from the start rather than a mid-flight session.
 
 ## Usage
 
