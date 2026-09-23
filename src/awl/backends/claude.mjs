@@ -98,8 +98,9 @@ export function makeClaudeBackend(opts = {}) {
         },
       };
     },
-    async decide({ prompt, questions }) {
-      const res = await this.ask({ prompt, def: { prompt: '', model: 'frontier' }, cwd: opts.cwd, agentName: 'decider' });
+    async decide({ prompt, questions, model }) {
+      const modelStr = model?.model;
+      const res = await this.ask({ prompt, def: { prompt: '', model: modelStr }, cwd: opts.cwd, agentName: 'decider' });
       return parseAnswers(res.output, questions);
     },
   };

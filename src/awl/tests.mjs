@@ -8,7 +8,7 @@ import { loadWorkflow } from './loader.mjs';
 import { resolveBackend } from './backends/index.mjs';
 import { runWorkflow } from './engine.mjs';
 import { newRun } from './runstore.mjs';
-import { makeTelemetryEmitter } from './telemetry.mjs';
+import { makeTelemetryEmitter, telemetryRecord } from './telemetry.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const tmp = () => mkdtempSync(join(tmpdir(), 'awl-test-'));
@@ -179,6 +179,12 @@ async function testTelemetry() {
   assert.strictEqual(rec.state, 'write');
   // fields not in workflow.telemetry.record are absent
   assert.ok(!('numTurns' in rec), 'record is restricted to telemetry.record list');
+  // non-llm kinds map to their own operation name and must not crash
+  const toolRec = telemetryRecord({
+    kind: 'tool', state: 'verify', run: 'run-01', workflow: 'mini.telemetry',
+    durationMs: 2, attempts: 1, loops: 1, outcome: 'ok', costUsd: 0,
+  }, workflow.telemetry);
+  assert.strictEqual(toolRec['gen_ai.operation.name'], 'run_command');
   rmSync(dir, { recursive: true, force: true });
   ok('telemetry emitter writes gen_ai.* JSONL');
 }

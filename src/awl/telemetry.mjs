@@ -19,10 +19,10 @@ export function telemetryRecord(entry, telemetry) {
   const rec = { run: entry.run, workflow: entry.workflow, state: entry.state };
   switch (entry.kind) {
     case 'llm': rec['gen_ai.operation.name'] = telemetry?.operationName ?? 'chat'; break;
-    case 'tool': rec.gen_ai.operation.name = 'run_command'; break;
-    case 'approval': rec.gen_ai.operation.name = 'human_approval'; break;
-    case 'parallel': rec.gen_ai.operation.name = 'parallel_fanout'; break;
-    case 'call': rec.gen_ai.operation.name = 'subflow'; break;
+    case 'tool': rec['gen_ai.operation.name'] = 'run_command'; break;
+    case 'approval': rec['gen_ai.operation.name'] = 'human_approval'; break;
+    case 'parallel': rec['gen_ai.operation.name'] = 'parallel_fanout'; break;
+    case 'call': rec['gen_ai.operation.name'] = 'subflow'; break;
   }
   const want = telemetry?.record || ['durationMs', 'outcome'];
   for (const f of want) {
