@@ -24,7 +24,7 @@ export function makeClaudeBackend(opts = {}) {
     async init() {
       if (!queryFn) queryFn = (await import('@anthropic-ai/claude-agent-sdk')).query;
       if (!process.env.ANTHROPIC_API_KEY && !opts.apiKey) {
-        throw new Error('claude backend needs ANTHROPIC_API_KEY. Set AWL_BACKEND=mock to run without one.');
+        throw new Error('claude backend needs ANTHROPIC_API_KEY. Set ANTHROPIC_API_KEY or AWL_BACKEND=mock to run without one.');
       }
     },
     async ask({ prompt, def, model, cwd, agentName, sidekickDefs }) {
@@ -36,6 +36,10 @@ export function makeClaudeBackend(opts = {}) {
         + '\n\nYou are the "' + (agentName || 'agent') + '" role in an agent workflow.'
         + (readOnly ? '\nREAD-ONLY: you must never modify the filesystem. Only the allowlisted tools are available.' : '')
         + (def.cleanContext ? '\nClean context: treat this session as isolated; re-discover what you need rather than assuming prior turns.' : '');
+      const resolvedModel = typeof def.model === 'string' ? def.model : undefined;
+
+      const toolUse = {};
+      const telemetryHooks = buildHooks(hooks, toolUse);
 
       const options = {
         prompt,
@@ -43,12 +47,14 @@ export function makeClaudeBackend(opts = {}) {
         permissionMode,
         systemPrompt,
         maxTurns: def.maxTurns || 40,
-        hooks: hooks ?? {},
+        hooks: telemetryHooks,
       };
-      const resolvedModel = typeof def.model === 'string' ? def.model : undefined;
       if (resolvedModel) options.model = resolvedModel;
       if (dangerous) options.allowDangerouslySkipPermissions = true;
-      if (readOnly || tools) options.allowedTools = tools || [];
+      // read-only: allowlist is the sole gate (dontAsk denies anything not pre-approved).
+      if (readOnly) options.allowedTools = tools || ['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch'];
+      else if (tools) options.allowedTools = tools;
+      else if (auto && !dangerous) options.allowedTools = ['Read', 'Write', 'Edit', 'MultiEdit', 'Glob', 'Grep'];
       if (def.sidekicks && def.sidekicks.length && sidekickDefs) {
         const agents = {};
         const background = [];
@@ -74,13 +80,21 @@ export function makeClaudeBackend(opts = {}) {
           ? m.message.content.map((c) => c.type === 'text' ? c.text : '').join(' ')
           : '')
         .join('\n');
+      const u = result?.usage || {};
       return {
         output: text || result?.result || '',
         metadata: {
           costUsd: result?.total_cost_usd ?? 0,
           numTurns: result?.num_turns ?? 0,
           durationMs: result?.duration_ms ?? 0,
-          usage: result?.usage ?? {},
+          provider: 'anthropic',
+          model: resolvedModel,
+          usage: {
+            input_tokens: u.input_tokens,
+            output_tokens: u.output_tokens,
+            cache_read_input_tokens: u.cache_read_input_tokens,
+          },
+          toolCalls: toolUse,
         },
       };
     },
@@ -89,6 +103,24 @@ export function makeClaudeBackend(opts = {}) {
       return parseAnswers(res.output, questions);
     },
   };
+}
+
+function buildHooks(userHooks = {}, toolUse) {
+  const out = {};
+  for (const [ev, matchers] of Object.entries(userHooks || {})) out[ev] = matchers;
+  out.PostToolUse = [
+    ...(out.PostToolUse || []),
+    {
+      matcher: '*',
+      hook: async (entry) => {
+        try {
+          const name = entry.input?.tool_name || '';
+          if (name) toolUse[name] = (toolUse[name] || 0) + 1;
+        } catch { /* telemetry must never break a run */ }
+      },
+    },
+  ];
+  return out;
 }
 
 function sidekickDefinition(name, sd) {

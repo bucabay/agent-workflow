@@ -5,6 +5,7 @@ import { loadWorkflow } from './loader.mjs';
 import { resolveBackend } from './backends/index.mjs';
 import { runWorkflow } from './engine.mjs';
 import { runDir, newRun, saveRun, loadRun, listRuns } from './runstore.mjs';
+import { makeTelemetryEmitter } from './telemetry.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_WORKFLOW = resolve(__dirname, '..', '..', 'default.workflow.json');
@@ -26,6 +27,8 @@ options:
   -y, --yes                auto-approve approval states
   --auto                   writers run with acceptEdits (unattended edits)
   --dangerous              writers run with bypassPermissions (use with care)
+  --telemetry <file>       append OTel-aligned JSONL telemetry per state (env AWL_TELEMETRY)
+  --model-override k=v     swap workflow.models[k].model before running (repeatable)
 `;
 
 export async function main(argv = process.argv.slice(2)) {
@@ -52,6 +55,13 @@ export async function main(argv = process.argv.slice(2)) {
   const cwd = value(['--cwd'], process.cwd());
   const inputFile = value(['--input'], null);
   const dirFlag = value(['--dir'], null);
+  const telemetryFile = value(['--telemetry'], process.env.AWL_TELEMETRY || null);
+  const overrides = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--model-override' && args[i + 1]?.includes('=')) {
+      overrides.push(args[i + 1]); args.splice(i, 2); i--;
+    }
+  }
 
   switch (cmd) {
     case 'validate': {
@@ -68,24 +78,32 @@ export async function main(argv = process.argv.slice(2)) {
     case 'run': {
       const wfPath = resolve(args.shift() || DEFAULT_WORKFLOW);
       const input = inputFile ? JSON.parse(readFileSync(inputFile, 'utf8')) : {};
-      const { workflow } = await loadWorkflow(wfPath, DEFAULT_SCHEMA, { silent: false });
-      const backend = await resolveBackend(backendName, { auto, dangerous });
+      const { workflow: wf } = await loadWorkflow(wfPath, DEFAULT_SCHEMA, { silent: false });
+      const workflow = applyOverrides(wf, overrides);
+      const backend = await resolveBackend(backendName, { auto, dangerous, apiKey: process.env.ANTHROPIC_API_KEY });
       const dir = runDir(cwd);
       mkdirSync(dir, { recursive: true });
       let run = newRun({ workflow, workflowPath: wfPath, cwd, input, runDir: dir });
       saveRun(run, dir);
       const live = run;
-      process.stdout.write(`run ${live.id} on ${workflow.name} (backend ${backend.name})\n`);
+      const telem = makeTelemetryEmitter({ path: telemetryFile, workflow, runId: live.id });
+      process.stdout.write(`run ${live.id} on ${workflow.name} (backend ${backend.name})` +
+        (telemetryFile ? ` telemetry ${telemetryFile}` : '') + '\n');
       try {
-        await runWorkflow({ workflow, backend, input, cwd, run: live, yes, onEvent: progressEvents(process.stdout) });
+        await runWorkflow({ workflow, backend, input, cwd, run: live, yes,
+          onEvent: (e) => { progressEvents(process.stdout)(e); telem.emit(e); } });
         console.log(`\ncompleted -> ${live.finalState}  cost $${totalCost(live).toFixed(4)}  ` +
-          `states ${live.ledger.length}  ${live.completed ? 'OK' : 'FAIL'}`);
+          `states ${live.ledger.length}  ${live.completed ? 'OK' : 'FAIL'}` +
+          (telem.count() ? `  telemetry ${telem.count()} records` : ''));
         saveRun(live, dir);
         return live;
       } catch (err) {
         live.error = String(err.message);
         saveRun(live, dir);
         throw err;
+      } finally {
+        telem.close();
+        if (backend.destroy) await backend.destroy();
       }
     }
     case 'resume': {
@@ -93,15 +111,18 @@ export async function main(argv = process.argv.slice(2)) {
       if (!id) { console.error('resume needs a run id'); process.exit(1); }
       const dir = dirFlag ? resolve(dirFlag) : runDir(cwd);
       const prev = loadRun(id, dir);
-      const { workflow } = await loadWorkflow(prev.workflowPath, DEFAULT_SCHEMA);
-      const backend = await resolveBackend(backendName, { auto, dangerous });
+      const { workflow: wf } = await loadWorkflow(prev.workflowPath, DEFAULT_SCHEMA);
+      const workflow = applyOverrides(wf, overrides);
+      const backend = await resolveBackend(backendName, { auto, dangerous, apiKey: process.env.ANTHROPIC_API_KEY });
       prev.startTime = Date.now();
       prev.error = null;
       prev.currentState = null;
       saveRun(prev, dir);
+      const telem = makeTelemetryEmitter({ path: telemetryFile, workflow, runId: prev.id });
       process.stdout.write(`resume run ${id} on ${workflow.name} (${prev.ledger.length} states already on the ledger)\n`);
       try {
-        await runWorkflow({ workflow, backend, input: prev.input, cwd: prev.cwd, run: prev, yes, onEvent: progressEvents(process.stdout) });
+        await runWorkflow({ workflow, backend, input: prev.input, cwd: prev.cwd, run: prev, yes,
+          onEvent: (e) => { progressEvents(process.stdout)(e); telem.emit(e); } });
         console.log(`\ncompleted -> ${prev.finalState}  cost $${totalCost(prev).toFixed(4)}`);
         saveRun(prev, dir);
         return prev;
@@ -109,6 +130,9 @@ export async function main(argv = process.argv.slice(2)) {
         prev.error = String(err.message);
         saveRun(prev, dir);
         throw err;
+      } finally {
+        telem.close();
+        if (backend.destroy) await backend.destroy();
       }
     }
     case 'status': {
@@ -169,6 +193,18 @@ function printCost(workflow) {
   }
   console.log(`  ${'TOTAL'.padEnd(22)} est $${total.toFixed(4)}  (ignoring retries/loops/cache)`);
   return total;
+}
+
+function applyOverrides(workflow, overrides = []) {
+  if (!overrides.length) return workflow;
+  const models = structuredClone(workflow.models || {});
+  for (const kv of overrides) {
+    const [k, ...rest] = kv.split('=');
+    const v = rest.join('=');
+    if (!models[k]) { console.warn(`--model-override: unknown model key '${k}', ignoring`); continue; }
+    models[k] = { ...models[k], model: v };
+  }
+  return { ...workflow, models };
 }
 
 export function totalCost(run) {

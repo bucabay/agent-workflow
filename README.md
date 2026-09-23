@@ -111,10 +111,12 @@ src/awl/
 ├── decisions.mjs        # research-grounded decisions: llm | jev deciders
 ├── state.mjs            # $.path conditions + answerWhen/confidence evaluation
 ├── verify.mjs           # tool tasks (sh -c) + approval TTY prompt
+├── telemetry.mjs        # OTel-aligned JSONL emitter (schema $.telemetry.record)
 ├── runstore.mjs         # run checkpoint journals (.awl/runs/<id>.json), resume
 ├── cli.mjs              # validate / cost / run / resume / status
 └── backends/
     ├── claude.mjs       # Claude Agent SDK adapter (primary)
+    ├── opencode.mjs     # @opencode-ai/sdk adapter
     └── mock.mjs         # scripted backend for tests
 ```
 
@@ -122,6 +124,11 @@ Backend mapping to the Agent SDK: read-only agents → `permissionMode: "dontAsk
 a mapped tool allowlist (`read/grep/glob/git` → `Read`/`Grep`/`Glob`/`Bash`); clean
 context → fresh session per state; `sidekicks[]` → SDK subagent definitions; tool-call
 hooks → telemetry; `total_cost_usd` → the per-state cost ledger.
+
+The **opencode backend** (`--backend opencode`) drives `@opencode-ai/sdk` the same way:
+read-only agents get a session where the write/bash/edit tools are disabled; every state
+gets its own session (clean context); model strings may be `providerID/modelID`.
+Credentials come from `opencode auth login` or `AWL_OPENCODE_API_KEY`.
 
 ```sh
 npm i
@@ -133,7 +140,15 @@ node bin/awl.mjs run     default.workflow.json --input input.json -y --auto
 node bin/awl.mjs status                           # persisted runs
 node bin/awl.mjs resume  <runId>                  # re-run reusing decisions/loop counts
 AWL_BACKEND=mock node bin/awl.mjs run default.workflow.json   # no API key (deterministic)
+node bin/awl.mjs run wf.json --backend opencode               # opencode backend
 ```
+
+`--model-override key=model-id` swaps `workflow.models[key].model` before a run, so
+placeholder model ids (e.g. `<frontier-model>`) can be filled per invocation.
+`--telemetry <file>` (or `$AWL_TELEMETRY`) appends one OTel-shaped JSONL line per ledger
+entry, mapped from the workflow's `$.telemetry.record` — `gen_ai.operation.name`,
+`gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.usage.{input,output,cache_read.input}_tokens`,
+plus `durationMs`, `attempts`, `loops`, `outcome`, `costUsd`.
 
 - **Verification is real**: `tool` states run the shell command (`lint && test && typecheck`)
   as the deterministic gate; the model never self-evaluates.

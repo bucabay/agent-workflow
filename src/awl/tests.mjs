@@ -8,6 +8,7 @@ import { loadWorkflow } from './loader.mjs';
 import { resolveBackend } from './backends/index.mjs';
 import { runWorkflow } from './engine.mjs';
 import { newRun } from './runstore.mjs';
+import { makeTelemetryEmitter } from './telemetry.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const tmp = () => mkdtempSync(join(tmpdir(), 'awl-test-'));
@@ -137,9 +138,55 @@ async function testCost() {
   ok('totalCost sums ledger');
 }
 
+// ---------- test 5: telemetry emitter writes OTel-aligned records ----------
+async function testTelemetry() {
+  const dir = tmp();
+  const file = join(dir, 'runs.jsonl');
+  const workflow = {
+    name: 'mini.telemetry',
+    telemetry: {
+      operationName: 'chat',
+      record: [
+        'gen_ai.usage.input_tokens',
+        'gen_ai.usage.output_tokens',
+        'gen_ai.usage.cache_read.input_tokens',
+        'gen_ai.provider.name',
+        'gen_ai.request.model',
+        'durationMs',
+        'outcome',
+        'costUsd',
+      ],
+    },
+  };
+  const emitter = makeTelemetryEmitter({ path: file, workflow, runId: 'run-01' });
+  emitter.emit({
+    kind: 'llm', state: 'write', run: 'run-01', workflow: 'mini.telemetry',
+    usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 20 },
+    provider: 'anthropic', model: 'claude-x', durationMs: 5, attempt: 1, loops: 0, outcome: 'ok', costUsd: 0.004,
+  });
+  emitter.close();
+  const lines = readFileSync(file, 'utf8').trim().split('\n');
+  assert.strictEqual(emitter.count(), 1, 'one record written');
+  assert.strictEqual(lines.length, 1, 'single JSONL line');
+  const rec = JSON.parse(lines[0]);
+  assert.strictEqual(rec['gen_ai.usage.input_tokens'], 100);
+  assert.strictEqual(rec['gen_ai.usage.output_tokens'], 50);
+  assert.strictEqual(rec['gen_ai.usage.cache_read.input_tokens'], 20);
+  assert.strictEqual(rec['gen_ai.provider.name'], 'anthropic');
+  assert.strictEqual(rec['gen_ai.request.model'], 'claude-x');
+  assert.strictEqual(rec['gen_ai.operation.name'], 'chat');
+  assert.strictEqual(rec.outcome, 'ok');
+  assert.strictEqual(rec.state, 'write');
+  // fields not in workflow.telemetry.record are absent
+  assert.ok(!('numTurns' in rec), 'record is restricted to telemetry.record list');
+  rmSync(dir, { recursive: true, force: true });
+  ok('telemetry emitter writes gen_ai.* JSONL');
+}
+
 console.log('awl engine tests');
 await testDefault();
 await testConfidenceFallthrough();
 await testApproval();
 await testCost();
+await testTelemetry();
 console.log(`\n${passed} passing`);

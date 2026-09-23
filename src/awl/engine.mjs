@@ -13,7 +13,11 @@ export async function runWorkflow({ workflow, backend, input = {}, cwd, run, yes
   const events = (kind, payload) => onEvent({ kind, ...payload });
 
   const dataOf = (r) => Object.assign({}, r.outputs, r.input || {});
-  const record = (r, e) => { r.ledger.push(e); events('ledger', e); };
+  const record = (r, e) => {
+    const entry = { run: r.id, workflow: workflow.name, ...e };
+    r.ledger.push(entry);
+    events('ledger', entry);
+  };
 
   const resolveModelName = (def) => {
     const m = workflow.models?.[def.model];
@@ -60,6 +64,10 @@ export async function runWorkflow({ workflow, backend, input = {}, cwd, run, yes
           costUsd: res.metadata?.costUsd ?? 0,
           durationMs: res.metadata?.durationMs ?? Date.now() - t0,
           numTurns: res.metadata?.numTurns ?? 0,
+          usage: res.metadata?.usage ?? {},
+          provider: res.metadata?.provider,
+          model: res.metadata?.model ?? resolveModelName(def),
+          loops: run.guardCounts[stateId] ?? 0,
           outcome: 'ok',
         });
         return res.output;
