@@ -151,7 +151,9 @@ entry, mapped from the workflow's `$.telemetry.record` — `gen_ai.operation.nam
 plus `durationMs`, `attempts`, `loops`, `outcome`, `costUsd`.
 
 - **Verification is real**: `tool` states run the shell command (`lint && test && typecheck`)
-  as the deterministic gate; the model never self-evaluates.
+  as the deterministic gate; the model never self-evaluates. The command runs via `sh -c` with
+  the run's `cwd` on `PATH`, so a repo-local script (`lint`, `typecheck`, …) resolves by name.
+  Note `test` is a POSIX shell builtin, so prefer `./test` (or a non-builtin name) for a test script.
 - **Decisions are first-class**: an LLM decider answers the Jev-shaped questions from
   `research` + `guidelines` + folded state; `engine: "jev"` posts the same body to
   `$AWL_JEV_URL`. Branches route on answers with confidence floors.
