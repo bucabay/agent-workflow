@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +9,7 @@ import { resolveBackend } from './backends/index.mjs';
 import { runWorkflow } from './engine.mjs';
 import { newRun } from './runstore.mjs';
 import { makeTelemetryEmitter, telemetryRecord } from './telemetry.mjs';
+import { runToolState } from './verify.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const tmp = () => mkdtempSync(join(tmpdir(), 'awl-test-'));
@@ -189,10 +190,25 @@ async function testTelemetry() {
   ok('telemetry emitter writes gen_ai.* JSONL');
 }
 
+// ---------- test 6: verify tool puts cwd on PATH ----------
+async function testVerifyPath() {
+  const dir = tmp();
+  writeFileSync(join(dir, 'mycheck'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  // bare `mycheck` (not a shell builtin like `test`) must resolve via cwd-on-PATH
+  const pass = await runToolState({ run: { command: 'mycheck' } }, null, dir);
+  assert.strictEqual(pass.passed, true, 'bare command resolved from cwd on PATH');
+  writeFileSync(join(dir, 'mycheck'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+  const fail = await runToolState({ run: { command: 'mycheck' } }, null, dir);
+  assert.strictEqual(fail.passed, false, 'failing command reported as not passed');
+  rmSync(dir, { recursive: true, force: true });
+  ok('verify tool prepends cwd to PATH for bare commands');
+}
+
 console.log('awl engine tests');
 await testDefault();
 await testConfidenceFallthrough();
 await testApproval();
 await testCost();
 await testTelemetry();
+await testVerifyPath();
 console.log(`\n${passed} passing`);

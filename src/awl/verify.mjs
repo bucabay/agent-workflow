@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createInterface } from 'node:readline';
+import { delimiter as pathDelimiter } from 'node:path';
 
 const pexec = promisify(execFile);
 
@@ -13,6 +14,7 @@ export async function runToolState(s, state, cwd) {
       cwd,
       timeout: timeoutMs || undefined,
       maxBuffer: 32 * 1024 * 1024,
+      env: { ...process.env, PATH: `${cwd}${pathDelimiter}${process.env.PATH ?? ''}` },
     });
     return {
       passed: true,
