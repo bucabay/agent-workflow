@@ -9,6 +9,20 @@ This package ships the schema, an evidence-based reference workflow (`agent.defa
 tooling that validates a workflow and renders it to diagrams, and a reference **client**
 (`awl`) that executes workflows against a pluggable agent backend.
 
+## Current implementation status
+
+The reference client has six passing tests and a completed OpenCode/big-pickle sandbox
+run. The OpenCode adapter still has unresolved completion, permission, retry, and
+usage-accounting defects. See [the continuation handoff](docs/CONTINUATION.md) for
+review findings, evidence, and the ordered repair backlog (code baseline `f824b3e`).
+
+The default workflow is a template, not a ready-to-run verification setup: replace
+both `lint && test && typecheck` commands with your project's actual commands before
+running it. Bare `test` is a shell builtin and returns failure with no arguments;
+use explicit script paths (such as `./lint && ./test && ./typecheck`) or package-manager
+commands. Model placeholders also need overrides. The successful sandbox used a
+customized workflow, not the unmodified default.
+
 ## Description
 
 A workflow is a JSON document:
@@ -57,7 +71,8 @@ explore (4 parallel cheap read-only agents)
 ├── src/awl/                # the client: engine, decisions, backends, ledger (see below)
 ├── visual/                 # generated artifacts (graph.mmd/.canvas/.svg/.html)
 └── docs/
-    └── RESEARCH.md         # research overview with links behind the design
+    ├── RESEARCH.md         # research overview with links behind the design
+    └── CONTINUATION.md     # implementation status, review findings, next steps
 ```
 
 ### The reference workflow, state by state
@@ -76,7 +91,10 @@ explore (4 parallel cheap read-only agents)
 Subflows: `explore_repo` (a single isolated exploration pass) and `fix_attempt`
 (writer + re-verify bounded corrective pass).
 
-### Design rules the workflow enforces
+### Intended design rules
+
+These describe the reference design; enforcement depends on the backend and configured
+models. In particular, the current OpenCode adapter does not enforce read-only roles.
 
 - **Reads parallelize, writes serialise.** Exploration fans out across isolated cheap
   contexts; exactly one agent ever writes, so implicit decisions never conflict.
@@ -125,10 +143,21 @@ a mapped tool allowlist (`read/grep/glob/git` → `Read`/`Grep`/`Glob`/`Bash`); 
 context → fresh session per state; `sidekicks[]` → SDK subagent definitions; tool-call
 hooks → telemetry; `total_cost_usd` → the per-state cost ledger.
 
-The **opencode backend** (`--backend opencode`) drives `@opencode-ai/sdk` the same way:
-read-only agents get a session where the write/bash/edit tools are disabled; every state
-gets its own session (clean context); model strings may be `providerID/modelID`.
-Credentials come from `opencode auth login` or `AWL_OPENCODE_API_KEY`.
+The **opencode backend** (`--backend opencode`) drives `@opencode-ai/sdk` through a
+fresh session per `ask()` and accepts model strings of the form `providerID/modelID`.
+It tries to attach to a local server (default `127.0.0.1:4096`) before spawning one.
+Attached servers keep their existing credentials; the adapter skips `auth.set` on them.
+For a spawned server, it uses the backend's `apiKey` option or `AWL_OPENCODE_API_KEY`;
+the CLI currently passes `ANTHROPIC_API_KEY` as that option, which takes precedence.
+
+Turns use `promptAsync` plus message polling, with a synchronous fallback. The adapter
+recreates a session after 120 seconds without a new assistant message, with up to two
+stuck-turn retries and a no-bash prompt hint. This is a heuristic, not proof a tool hung.
+Read-only roles receive a prompt instruction, but write/bash/edit tools are **not
+reliably disabled**: the default tool-map option is miswired, enabled-only maps do not
+remove the server's existing tools, and auto-approved actions bypass the responder.
+The poller also currently accepts intermediate `finish: "tool-calls"` messages as
+completion. See the handoff before relying on these contracts.
 
 ```sh
 npm i
@@ -136,10 +165,11 @@ export ANTHROPIC_API_KEY=...
 
 node bin/awl.mjs validate default.workflow.json   # schema + reference check
 node bin/awl.mjs cost    default.workflow.json    # per-state estimate
-node bin/awl.mjs run     default.workflow.json --input input.json -y --auto
+# First customize wf.json: real model IDs and project-specific verification commands.
+node bin/awl.mjs run     wf.json --input input.json -y --auto
 node bin/awl.mjs status                           # persisted runs
 node bin/awl.mjs resume  <runId>                  # re-run reusing decisions/loop counts
-AWL_BACKEND=mock node bin/awl.mjs run default.workflow.json   # no API key (deterministic)
+AWL_BACKEND=mock node bin/awl.mjs run wf.json       # LLM calls mocked; tool commands still execute
 node bin/awl.mjs run wf.json --backend opencode               # opencode backend
 ```
 
@@ -149,6 +179,10 @@ placeholder model ids (e.g. `<frontier-model>`) can be filled per invocation.
 entry, mapped from the workflow's `$.telemetry.record` — `gen_ai.operation.name`,
 `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.usage.{input,output,cache_read.input}_tokens`,
 plus `durationMs`, `attempts`, `loops`, `outcome`, `costUsd`.
+Only fields available in the ledger entry are emitted. Tool entries currently supply
+an outcome but no duration or cost; OpenCode usage/cost/duration cover only the returned
+assistant message, not the entire multi-step turn. Decider calls are not separately
+recorded in the ledger, so ledger cost is not a complete bill for a run.
 
 - **Verification is real**: `tool` states run the shell command (`lint && test && typecheck`)
   as the deterministic gate; the model never self-evaluates. The command runs via `sh -c` with
@@ -159,8 +193,9 @@ plus `durationMs`, `attempts`, `loops`, `outcome`, `costUsd`.
   `$AWL_JEV_URL`. Branches route on answers with confidence floors.
 - **Loops are bounded**: guard counters feed the ledger; exhaustion routes to
   `exhaustNext` (and a hard `AWL_MAX_REPLANS=10` cap prevents infinite replan loops).
-- **Resume is decision-preserving**: persisted runs replay with stored decision answers,
-  guard counts, and outputs, so a `resume` reproduces the exact flow up to the failure.
+- **Resume reuses decisions**: persisted runs replay from the start with stored decision
+  answers, guard counts, and outputs. Tasks execute again, so this is not an exact replay
+  or a mid-flight continuation and can repeat side effects.
 
 Caveats: `parallel`/`map`/`call` subflows write into the shared run ledger; a subflow
 state targeting a main-scope state ends the subflow (the caller follows its own `next`);

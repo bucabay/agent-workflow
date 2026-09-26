@@ -3,6 +3,9 @@
 Where the `agent.default` workflow design comes from, and what each source actually
 contributes. Every evidence block inside `default.workflow.json` cites one of these.
 
+This page explains design rationale, not verified runtime guarantees. Current client
+limitations and the implementation backlog are tracked in [CONTINUATION.md](CONTINUATION.md).
+
 ## Working consensus: multi-agent systems today
 
 The through-line across the field is: **reads parallelize cleanly; writes must stay
